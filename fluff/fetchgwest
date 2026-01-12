@@ -4,7 +4,7 @@
 ###########
 BASE_SPACE="      "
 BOX="~"
-AUR_LIST_CMD='aur list'
+AUR_LIST_CMD='malgware list'
 
 NC='\033[0m'
 RED='\033[1;31m'
