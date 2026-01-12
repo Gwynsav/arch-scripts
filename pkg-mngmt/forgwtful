@@ -3,7 +3,7 @@
 ## Configuration
 ################
 DATEFILE="${HOME}/.local/state/last_sys_update"
-AUR_UPDATE_CMD="aur update"
+AUR_UPDATE_CMD="malgware update"
 
 ## Constants
 ############
