@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+
+## Configuration
+################
+DATEFILE="${HOME}/.local/state/last_sys_update"
+AUR_UPDATE_CMD="aur update"
+
+## Constants
+############
+CURR_S=`date "+%s"`
+HOUR_S=$((60*60))
+DAY_S=$((24*HOUR_S))
+WEEK_S=$((7*DAY_S))
+
+# Notify the user if a week has passed since the last update.
+notify_new_update() {
+   # If it's our first time running the script, just record the current date.
+   if [ ! -f $DATEFILE ]; then
+      echo $((CURR_S - (CURR_S % DAY_S) - HOUR_S)) > $DATEFILE
+      exit
+   fi
+
+   # Otherwise, check if it's been a week since the last run yet.
+   LAST_S=`cat $DATEFILE`
+   PASS_S=$((LAST_S + WEEK_S))
+   # If not, leave.
+   if [ $PASS_S -gt $CURR_S ]; then
+      exit
+   fi
+
+   # Notify the user that it's time to update!
+   notify-send "Updates!" "Remember to run \`updates do\` soon!"
+}
+
+# Remove orphaned packages and unused dependencies.
+remove_unused() {
+   echo "Removing orphans and their unused dependencies..."
+   sudo pacman -Qdtq | sudo pacman -Rs -
+   # Also preserves only the latest 2 ProtonGE versions.
+   while IFS= read -r line; do
+      OLDGE="$(echo $line | xargs echo)"
+      echo "Removing old ProtonGE version: $OLDGE..."
+      echo "Y" | protonup -r "$OLDGE" > /dev/null
+   done < <(protonup -l | tail -n +3 | awk '{print $1}')
+}
+
+# Run updates.
+do_new_update() {
+   echo "Running system updates..."
+   sudo pacman -Syu
+   echo ""
+   echo "=========================="
+   echo "Updating AUR packages..."
+   $AUR_UPDATE_CMD
+   echo ""
+   echo "=========================="
+   echo "Running flatpak updates..."
+   flatpak update
+   echo ""
+   echo "=========================="
+   echo "Installing new ProtonGE..."
+   echo "Y" | protonup
+   echo $((CURR_S - (CURR_S % DAY_S) - HOUR_S)) > $DATEFILE
+}
+
+# Consult when the last update was ran from the terminal.
+when_last_update() {
+   LAST=`cat $DATEFILE`
+   NEXT=$((LAST + WEEK_S))
+   NOW=`date '+%s'`
+   echo "Last update ran on:"
+   echo "   $(date '+%D' --date=@$LAST)"
+   if [ $NOW -lt $NEXT ]; then
+      echo "Update as early as:"
+      echo "   $(date '+%D' --date=@$NEXT)"
+   else
+      echo "Consider updating soon!"
+   fi
+}
+
+# $1: specificies the script's operation mode.
+#     - `check` notifies the user if it's been longer than a week since the last
+#     `do` run.
+#     - `clean` removes orphans and their unwanted dependencies.
+#     - `do` updates all system and flatpak packages.
+#     - `when` shows whether it's been longer than a week since the last `do`
+#     run in the terminal.
+case $1 in
+   "check") notify_new_update ;;
+   "clean") remove_unused ;;
+   "do") do_new_update ;;
+   "when") when_last_update ;;
+   *)
+   echo "Usage:"
+   echo "   updates check   Notifies the user if it's been longer than a week since the last \`do\` run."
+   echo "   updates clean   Removes orphaned packages and their unwanted dependencies."
+   echo "   updates do      Runs an update of system and flatpak packages, records the date."
+   echo "   updates when    Consults if it's been longer than a week since the last \`do\` run from CLI."
+   ;;
+esac

@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+## A helper script to manage AUR packages.
+## Allows you to:
+## - List all packages installed through the AUR.
+## - Install an AUR package through its name.
+## - Uninstall an AUR package through its name.
+## - Update any given AUR package through its name.
+## - Update all installed AUR packages.
+
+# The place where AUR packages are persisted.
+AUR_REPO_DIR="/opt/aur"
+# The place where AUR packages are cached during installation.
+TMP_PKG_DIR="/tmp/aur"
+# Package versions follow the format `-N:M.X...-Y`.
+REGEX="-\d*:?\d*\.\d*.*\.pkg\.tar\.zst"
+
+## Lists all installed AUR packages as well as their versions.
+_list() {
+   for repo in $(ls "${AUR_REPO_DIR}"); do
+      [ ! -d "${AUR_REPO_DIR}/${repo}" ] && continue
+      [ ! -f "${AUR_REPO_DIR}/${repo}/PKGBUILD" ] && continue
+
+      VER=`grep -P 'pkgver\=.*' ${AUR_REPO_DIR}/${repo}/PKGBUILD`
+      REL=`grep -P 'pkgrel\=.*' ${AUR_REPO_DIR}/${repo}/PKGBUILD`
+
+      echo "$repo ${VER#*=}-${REL#*=}"
+   done
+}
+
+## Installs all packages associated to an AUR package. Persists its files to
+## `$AUR_REPO_DIR`. If at any point the installation is interrupted/fails,
+## nothing is persisted.
+## $1 is the name of the package as presented in the AUR website.
+_install() {
+   if [ -d "${AUR_REPO_DIR}/$1" ]; then
+      echo "[ERR] \`$1\` is already installed!"
+      return
+   fi
+
+   git clone "https://aur.archlinux.org/$1.git" "${TMP_PKG_DIR}/$1"
+   # Check if file was cloned correctly.
+   if [ ! -d "${TMP_PKG_DIR}/$1" ]; then
+      echo "[ERR] No package \`$1\`!"
+      return
+   fi
+   # Skip any directories not containing a `PKGBUILD` file.
+   if [ ! -f "${TMP_PKG_DIR}/$1/PKGBUILD" ]; then
+      echo "[ERR] \`$1\` does not contain a PKGBUILD file!"
+      rm -rf "${TMP_PKG_DIR}/$1"
+      return
+   fi
+
+   ORIG="$(pwd)"
+
+   cd "${TMP_PKG_DIR}/$1"
+   # Have the user check the PKGBUILD to see that it isn't malicious.
+   less "${TMP_PKG_DIR}/$1/PKGBUILD"
+   read -p "Was the PKGBUILD acceptable? [y/n]: " pkgbuild_ok
+   while true; do
+      case "$pkgbuild_ok" in
+         "Y"|"y") break ;;
+         "N"|"n")
+            echo "Installation cancelled by user!"
+            cd "$ORIG"
+            rm -rf "${TMP_PKG_DIR}/$1"
+            return
+         ;;
+         *) read -p "Answer only with \`y\` or \`n\`: " pkgbuild_ok ;;
+      esac
+   done
+   # Install the package.
+   makepkg -csi
+
+   cd "$ORIG"
+   # We put the repo in volatile storage as to not persist failed installations.
+   if [ "$(pacman -Qq | grep -x $1)" ]; then
+      mv "${TMP_PKG_DIR}/$1" "${AUR_REPO_DIR}"
+   else
+      rm -rf "${TMP_PKG_DIR}/$1"
+   fi
+}
+
+## Uninstalls all packages associated to an AUR package using `pacman`. Removes
+## its files from `$AUR_REPO_DIR`.
+## $1 is the name of the package as presented in the AUR website.
+_uninstall() {
+   if [ ! -d "${AUR_REPO_DIR}/$1" ]; then
+      echo "[ERR] \`$1\` is not installed through the AUR!"
+      return
+   fi
+
+   # Removes every package installed by the AUR package (it may be multiple).
+   for pkg in $(ls "${AUR_REPO_DIR}/$1" | grep -oP "($1.*)(?=$REGEX)"); do
+      sudo pacman -Rns $pkg
+      # Only remove files if the package has been successfully uninstalled...
+      if [ ! "$(pacman -Qq | grep -x $pkg)" ]; then
+         rm -rf ${AUR_REPO_DIR}/$1/${pkg}*.zst
+      fi
+   done
+   # If we were to remove the directory unconditionally, the package would
+   # always be marked as uninstalled and `pacman` would not remove it!
+   REMAINING=`ls "${AUR_REPO_DIR}/$1" | grep -oP "($1.*)(?=$REGEX)"`
+   [ -z "$REMAINING" ] && rm -rf "${AUR_REPO_DIR}/$1"
+}
+
+## Updates all packages associated to a given AUR package.
+## $1 is path to a directory containing a PKGBUILD file.
+_update_by_path() {
+   # Skip anything that isn't a directory.
+   if [ ! -d "${AUR_REPO_DIR}/$1" ]; then
+      echo "[ERR] No directory \`$1\`!"
+      return
+   fi
+   # Skip any directories not containing a `PKGBUILD` file.
+   if [ ! -f "${AUR_REPO_DIR}/$1/PKGBUILD" ]; then
+      echo "[ERR] \`$1\` does not contain a PKGBUILD file!"
+      return
+   fi
+
+   ORIG="$(pwd)"
+
+   cd "${AUR_REPO_DIR}/$1"
+   # Avoid rebuilding the package if there are no updates available.
+   if [ ! -z "$(git pull origin master | grep -x 'Already up to date.')" ]; then
+      cd "$ORIG"
+      return
+   fi
+   # Have the user check for malicious updates.
+   less "PKGBUILD"
+   read -p "Was the PKGBUILD acceptable? [y/n]: " pkgbuild_ok
+   while true; do
+      case "$pkgbuild_ok" in
+         "Y"|"y") break ;;
+         "N"|"n")
+            echo "Update cancelled by user!"
+            cd "$ORIG"
+            return
+         ;;
+         *) read -p "Answer only with \`y\` or \`n\`: " pkgbuild_ok ;;
+      esac
+   done
+   # Install the AUR package, removes `src/` and `pkg/` afterward.
+   # Does not remove tarballs, but `-f` ignores them on subsequent runs.
+   makepkg -fcsi
+
+   cd "$ORIG"
+}
+
+## Upgrades all AUR packages within `$AUR_REPO_DIR`.
+_update_all() {
+   for repo in $(ls $AUR_REPO_DIR); do
+      _update_by_path "$repo"
+   done
+}
+
+case $1 in
+   "list") _list ;;
+   "install")
+      if [ -z "$2" ]; then
+         echo "[ERR] No package name provided!"
+         exit
+      fi
+      _install "$2"
+   ;;
+   "remove")
+      if [ -z "$2" ]; then
+         echo "[ERR] No package name provided!"
+         exit
+      fi
+      _uninstall "$2"
+   ;;
+   "update")
+      if [ -z "$2" ]; then
+         echo "Updating all AUR packages..."
+         _update_all
+      else
+         echo "Updating \`$2\`..."
+         _update_by_path "$2"
+      fi
+   ;;
+   *)
+      echo "Usage:"
+      echo "   aur list                 -- Lists all packages installed from the AUR."
+      echo "   aur install packagename  -- Install a package from the AUR."
+      echo "   aur remove packagename   -- Removes a package installed from the AUR."
+      echo "   aur update               -- Updates all AUR packages."
+      echo "   aur update packagename   -- Updates a specific AUR package by its path."
+esac

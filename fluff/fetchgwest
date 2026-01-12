@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+# Constants
+###########
+BASE_SPACE="      "
+BOX="~"
+AUR_LIST_CMD='aur list'
+
+NC='\033[0m'
+RED='\033[1;31m'
+GRN='\033[1;32m'
+BLU='\033[1;34m'
+YLW='\033[1;33m'
+PRP='\033[1;35m'
+CYA='\033[1;36m'
+GRY='\033[1;37m'
+
+# Information
+#############
+KERNEL=`uname -r | grep -oP '(\d+\.\d+\.\d+)(?=-.*)'`
+DISTRO=`cat /etc/os-release | grep -x 'ID=.*'` \
+   && DISTRO="${DISTRO#*=}" && DISTRO="${DISTRO,,}"
+
+_pacman=`pacman -Qq | wc -l`
+_flatpak=0
+if [ -f "$(which flatpak)" ]; then
+   _flatpak=`flatpak list | wc -l`
+fi
+_aur=0
+if [ -f "$(which ${AUR_LIST_CMD%% *})" ]; then
+   _aur=`$AUR_LIST_CMD | wc -l`
+fi
+_pipx=0
+if [ -f "$(which pipx)" ]; then
+   _pipx=`pipx list | grep -oP "package .* \d+\.\d+\.\d+," | wc -l`
+fi
+PACKGE="$((_pacman + _flatpak + _aur + _pipx))"
+
+WINDOW=""
+if [ ! -z "$XDG_CURRENT_DESKTOP" ]; then
+   WINDOW=${XDG_CURRENT_DESKTOP/X\-}
+   WINDOW=${WINDOW/Budgie:GNOME/Budgie}
+   WINDOW=${WINDOW/:Unity7:ubuntu}
+elif [ ! -z "$DESKTOP_SESSION" ]; then
+   WINDOW=${DESKTOP_SESSION##*/}
+fi
+WINDOW="${WINDOW,,}"
+
+# Print
+#######
+echo ""
+echo -e "${BASE_SPACE}       ${BLU}."
+echo -e "${BASE_SPACE}      ${BLU}/#\\"
+echo -e "${BASE_SPACE}     ${BLU}/###\\"
+echo -e "${BASE_SPACE}    ${BLU}/p^###\\"
+echo -e "${BASE_SPACE}   ${BLU}/##P^q##\\"
+echo -e "${BASE_SPACE}  ${BLU}/##(   )##\\"
+echo -e "${BASE_SPACE} ${BLU}/###P   q#,^\\"
+echo -e "${BASE_SPACE}${BLU}/P^         ^q\\"
+echo ""
+echo -e "${BASE_SPACE}${CYA}    os ${GRY}~ ${NC}$DISTRO"
+echo -e "${BASE_SPACE}${BLU}kernel ${GRY}~ ${NC}$KERNEL"
+echo -e "${BASE_SPACE}${CYA}  pkgs ${GRY}~ ${NC}$PACKGE"
+echo -e "${BASE_SPACE}${BLU} de/wm ${GRY}~ ${NC}$WINDOW"
+echo ""
+echo -e "${BASE_SPACE}  ${RED}${BOX} ${GRN}${BOX} ${YLW}${BOX} ${BLU}${BOX} ${PRP}${BOX} ${CYA}${BOX} ${NC}"
