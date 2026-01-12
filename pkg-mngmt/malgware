@@ -180,9 +180,9 @@ case $1 in
    ;;
    *)
       echo "Usage:"
-      echo "   aur list                 -- Lists all packages installed from the AUR."
-      echo "   aur install packagename  -- Install a package from the AUR."
-      echo "   aur remove packagename   -- Removes a package installed from the AUR."
-      echo "   aur update               -- Updates all AUR packages."
-      echo "   aur update packagename   -- Updates a specific AUR package by its path."
+      echo "   malgware list                 -- Lists all packages installed from the AUR."
+      echo "   malgware install packagename  -- Install a package from the AUR."
+      echo "   malgware remove packagename   -- Removes a package installed from the AUR."
+      echo "   malgware update               -- Updates all AUR packages."
+      echo "   malgware update packagename   -- Updates a specific AUR package by its path."
 esac
