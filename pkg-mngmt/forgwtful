@@ -92,9 +92,9 @@ case $1 in
    "when") when_last_update ;;
    *)
    echo "Usage:"
-   echo "   updates check   Notifies the user if it's been longer than a week since the last \`do\` run."
-   echo "   updates clean   Removes orphaned packages and their unwanted dependencies."
-   echo "   updates do      Runs an update of system and flatpak packages, records the date."
-   echo "   updates when    Consults if it's been longer than a week since the last \`do\` run from CLI."
+   echo "   forgwtful check   Notifies the user if it's been longer than a week since the last \`do\` run."
+   echo "   forgwtful clean   Removes orphaned packages and their unwanted dependencies."
+   echo "   forgwtful do      Runs an update of system and flatpak packages, records the date."
+   echo "   forgwtful when    Consults if it's been longer than a week since the last \`do\` run from CLI."
    ;;
 esac
